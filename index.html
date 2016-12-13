@@ -33,6 +33,7 @@
 <script src="js/EffectComposer.js"></script>
 <script src="js/ShaderPass.js"></script>
 <script src="js/RenderPass.js"></script>
+<script src="js/OrbitControls.js"></script>
 
 <script type="x-shader/x-vertex" id="vs-downsample">
 
@@ -220,12 +221,7 @@ for( var j = 0; j < links.length; j++ ) {
 
 var container, renderer, scene, camera, mesh, fov = 45;
 var start = Date.now();
-
-var onMouseDownMouseX = 0, onMouseDownMouseY = 0,
-lon = 0, onMouseDownLon = 0,
-lat = 0, onMouseDownLat = 0,
-phi = 0, theta = 0;
-isUserInteracting = false;
+var controls;
 
 var start = Date.now();
 	var x = 0, y = 0, z = 0;
@@ -255,11 +251,8 @@ function init() {
 
 	container.appendChild( renderer.domElement );
 
-	container.addEventListener( 'mousedown', onMouseDown, false );
-	container.addEventListener( 'mousemove', onMouseMove, false );
-	container.addEventListener( 'mouseup', onMouseUp, false );
-	container.addEventListener( 'mousewheel', onMouseWheel, false );
-	container.addEventListener( 'DOMMouseScroll', onMouseWheel, false);
+	controls = new THREE.OrbitControls( camera, renderer.domElement );
+
 	window.addEventListener( 'resize', onWindowResize, false );
 
 	material = new THREE.ShaderMaterial( {
@@ -349,140 +342,16 @@ function onWindowResize() {
 	composer2.setSize( window.innerWidth / 2, window.innerHeight / 2 );
 	camera.projectionMatrix.makePerspective( fov, window.innerWidth / window.innerHeight, camera.near, camera.far );
 	pass.uniforms.resolution.value.set( window.innerWidth, window.innerHeight );
-	colorBuffer = new THREE.WebGLRenderTarget( window.innerWidth, window.innerHeight, parameters );
+	colorBuffer.setSize( window.innerWidth, window.innerHeight );
 	var s = 1;
-	blurBuffer = new THREE.WebGLRenderTarget( Math.floor( window.innerWidth / s ), Math.floor( window.innerHeight / s ), parameters );
-}
-
-function onMouseWheel( event ) {
-
-	// WebKit
-
-	if ( event.wheelDeltaY ) {
-
-		fov -= event.wheelDeltaY * 0.01;
-
-	// Opera / Explorer 9
-
-	} else if ( event.wheelDelta ) {
-
-		fov -= event.wheelDelta * 0.05;
-
-	// Firefox
-
-	} else if ( event.detail ) {
-
-		fov += event.detail * 1.0;
-
-	}
-
-	camera.projectionMatrix.makePerspective( fov, window.innerWidth / window.innerHeight, camera.near, camera.far );
-
-}
-
-var keys = { up: false, left: false, right: false, down: false, forward: false, back: false };
-
-window.addEventListener( 'keydown', function( e ) {
-	console.log( e.keyCode );
-    switch( e.keyCode ) {
-        case 87: keys.forward = true; e.preventDefault(); break;
-        case 65: keys.left = true; e.preventDefault(); break;
-        case 68: keys.right = true; e.preventDefault(); break;
-        case 83: keys.back = true; e.preventDefault(); break;
-        case 32: keys.up = true; e.preventDefault(); break;
-        case 88: keys.down = true; e.preventDefault(); break;
-    }
-
-} )
-
-window.addEventListener( 'keyup', function( e ) {
-    switch( e.keyCode ) {
-        case 87: keys.forward = false; e.preventDefault(); break;
-        case 65: keys.left = false; e.preventDefault(); break;
-        case 68: keys.right = false; e.preventDefault(); break;
-        case 83: keys.back = false; e.preventDefault(); break;
-        case 32: keys.up = false; e.preventDefault(); break;
-        case 88: keys.down = false; e.preventDefault(); break;
-    }
-    e.preventDefault();
-} )
-
-lat = 0; lon = 267;
-position.x = lon; position.y = lat;
-
-function onMouseDown( event ) {
-
-	event.preventDefault();
-
-	isUserInteracting = true;
-
-	onPointerDownPointerX = event.clientX;
-	onPointerDownPointerY = event.clientY;
-
-	onPointerDownLon = lon;
-	onPointerDownLat = lat;
-
-}
-
-var mouse = { x: 0, y: 0 }
-var projector;
-
-function onMouseDown( event ) {
-
-    event.preventDefault();
-
-    isUserInteracting = true;
-
-    onPointerDownPointerX = event.clientX;
-    onPointerDownPointerY = event.clientY;
-
-    onPointerDownLon = lon;
-    onPointerDownLat = lat;
-
-}
-
-function onMouseUp( event ) {
-
-    event.preventDefault();
-
-    isUserInteracting = false;
-
-}
-
-function onMouseMove( event ) {
-
-    if ( isUserInteracting ) {
-        var dx = ( event.clientX - onPointerDownPointerX );
-        var dy = -( event.clientY - onPointerDownPointerY );
-        position.x = .75 * dx + onPointerDownLon;
-        position.y = .75 * dy + onPointerDownLat;
-    }
-
-    var mouse = {
-        x: ( event.clientX / container.clientWidth ) * 2 - 1,
-        y: - ( event.clientY / container.clientHeight ) * 2 + 1
-    }
-
+	blurBuffer.setSize( Math.floor( window.innerWidth / s ), Math.floor( window.innerHeight / s ) );
 }
 
 function render() {
 
+	controls.update();
+
 	var ellapsedFactor = clock.getDelta();
-
-    var olon = lon, olat = lat;
-    var s = 2.5 * ellapsedFactor;
-    lon = lon + ( position.x - olon ) * s;
-    lat = lat + ( position.y - olat ) * s;
-    var d = 100;
-    lat = Math.max( - 85, Math.min( 85, lat ) );
-    var phi = ( 90 - lat ) * Math.PI / 180;
-    var theta = lon * Math.PI / 180;
-
-	d = 30;
-	camera.position.x = d * Math.sin( phi ) * Math.cos( theta );
-	camera.position.y = d * Math.cos( phi );
-	camera.position.z = d * Math.sin( phi ) * Math.sin( theta );
-	camera.lookAt( camera.target );
 
 	renderer.setClearColor( 0xffffff );
 	mesh.material.uniforms.renderDepth.value = 0;
@@ -491,7 +360,7 @@ function render() {
 	composer2.render();
 
 	pass.uniforms.tColor.value = colorBuffer;
-	pass.uniforms.tBlur.value = composer2.readBuffer;
+	pass.uniforms.tBlur.value = composer2.readBuffer.texture;
 	mesh.material.uniforms.renderDepth.value = 1;
 	renderer.setClearColor( 0x808000 );
 
