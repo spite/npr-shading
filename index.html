@@ -5,89 +5,92 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 		<style>
-			*{ box-sizing: border-box; margin: 0; padding: 0 }
+			* { box-sizing: border-box; margin: 0; padding: 0; }
 			body {
-				color: #ffffff;
-				font-family: tahoma;
-				font-size:13px;
+				color: #fff;
+				font-family: tahoma, sans-serif;
+				font-size: 13px;
 				background-color: #222;
-				margin: 0px;
 				overflow: hidden;
 			}
-			a{ color: white; text-shadow: 0 1px 0 rgba( 0,0,0,.5 ) }
-			#container canvas{ position: absolute; left: 0; top: 0; width: 100%; height: 100%; bottom: 0;}
-			#title{ position: absolute; left: 10px; top: 10px; right: 0; text-shadow: 0 1px 0 rgba( 0,0,0,.6); color: white;}
+			a { color: white; text-shadow: 0 1px 0 rgba( 0, 0, 0, .5 ); }
+			canvas { position: fixed; left: 0; top: 0; display: block; touch-action: none; }
+			#title { position: absolute; z-index: 1; left: 10px; top: 10px; right: 10px; line-height: 1.4em; text-shadow: 0 1px 0 rgba( 0, 0, 0, .6 ); pointer-events: none; }
+			#title a { pointer-events: auto; }
+			#title p { margin-bottom: 10px; }
 		</style>
+		<script type="importmap">
+		{
+			"imports": {
+				"three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+				"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+			}
+		}
+		</script>
 	</head>
 	<body>
 
-		<div id="container"></div>
+		<div id="title">
+			<p><b>NPR Sketch shader</b> · postprocessing with GLSL</p>
+			<p>Based on <a href="http://www.thomaseichhorn.de/npr-sketch-shader-vvvv/" target="_blank" rel="noopener">Thomas Eichhorn's vvvv shader</a>.</p>
+			<p>Coded by Jaume Sanchez <a href="https://twitter.com/thespite" target="_blank" rel="noopener">@thespite</a> with <a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a>. Find the code on <a href="https://github.com/spite/npr-shading" target="_blank" rel="noopener">GitHub</a>.<br>
+			Click and drag to move the camera, scroll or pinch to zoom.</p>
+		</div>
 
-<div id="title">
-	<p><b>NPR Sketch shader</b> · postprocessing with GLSL</p>
-	<p>Based on <a href="http://www.thomaseichhorn.de/npr-sketch-shader-vvvv/" rel="external">Thomas Eichhorn's vvvv shader</a>.<br/><br/>Coded by Jaume Sanchez <a href="http://www.twitter.com/thespite" rel="external" >@thespite</a> with <a href="http://www.threejs.org" rel="external">three.js</a>.<br/>Click and drag to move the camera.</p>
-</div>
-
-<script src="js/three.min.js"></script>
-<script src="js/CopyShader.js"></script>
-<script src="js/EffectComposer.js"></script>
-<script src="js/ShaderPass.js"></script>
-<script src="js/RenderPass.js"></script>
-<script src="js/OrbitControls.js"></script>
-
-<script type="x-shader/x-vertex" id="vs-downsample">
+<script type="x-shader/x-vertex" id="vs-quad">
 
 	varying vec2 vUv;
 
 	void main() {
 
-		vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
-		gl_Position = projectionMatrix * mvPosition;
 		vUv = uv;
+		gl_Position = vec4( position.xy, 0., 1. );
 
 	}
 
 </script>
 
-<script type="x-shader/x-vertex" id="fs-downsample">
+<script type="x-shader/x-fragment" id="fs-blur">
 
 	varying vec2 vUv;
 	uniform sampler2D tDiffuse;
 	uniform vec2 delta;
 
-	float random(vec3 scale,float seed){return fract(sin(dot(gl_FragCoord.xyz+seed,scale))*43758.5453+seed);}
+	float random( vec3 scale, float seed ) { return fract( sin( dot( gl_FragCoord.xyz + seed, scale ) ) * 43758.5453 + seed ); }
 
 	void main() {
 
-		vec4 color=vec4(0.0);
-		float total=0.0;
-		float offset=random(vec3(12.9898,78.233,151.7182),0.0);
-		for(float t=-30.0;t<=30.0;t++){
-			float percent=(t+offset-0.5)/30.0;
-			float weight=1.0-abs(percent);
-			vec4 sample=texture2D(tDiffuse,vUv+delta*percent);
-			sample.rgb*=sample.a;
-			color+=sample*weight;
-			total+=weight;
+		vec4 color = vec4( 0. );
+		float total = 0.;
+		float offset = random( vec3( 12.9898, 78.233, 151.7182 ), 0. );
+
+		for ( float t = - 30.; t <= 30.; t ++ ) {
+
+			float percent = ( t + offset - .5 ) / 30.;
+			float weight = 1. - abs( percent );
+			color += texture2D( tDiffuse, vUv + delta * percent ) * weight;
+			total += weight;
+
 		}
 
-		gl_FragColor=color/total;
-		gl_FragColor.rgb/=gl_FragColor.a+0.00001;
+		gl_FragColor = color / total;
 
 	}
 
 </script>
 
-<script type="x-shader/x-vertex" id="vs-post">
+<script type="x-shader/x-vertex" id="vs-scene">
 
 	varying vec3 vNormal;
 	varying vec3 vPosition;
 	varying vec3 vLight;
-	vec4 lightPosition = vec4( 0., 0., -10., 1. );
+
+	// at the ball
+	const vec4 lightPosition = vec4( 0., 0., - 10., 1. );
 
 	void main() {
 
-		vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
+		vec4 mvPosition = modelViewMatrix * vec4( position, 1. );
 		gl_Position = projectionMatrix * mvPosition;
 		vNormal = normalMatrix * normal;
 		vPosition = mvPosition.xyz;
@@ -97,67 +100,36 @@
 
 </script>
 
-<script type="x-shader/x-vertex" id="fs-post">
+<script type="x-shader/x-fragment" id="fs-scene">
 
 	varying vec3 vNormal;
 	varying vec3 vPosition;
 	varying vec3 vLight;
 
-	uniform int renderDepth;
+	uniform float renderDepth;
 
 	void main() {
 
-		vec3 ambient = vec3( .1 );
 		vec3 n = normalize( vNormal );
-		vec3 s = normalize( vLight - vPosition );
 
-		vec3 color = vec3( .75 );
-		vec3 diffuse = color * max( 0.0, dot( n, s ) ) * vec3( 1. );
+		if ( renderDepth == 0. ) {
 
-		vec3 r = - reflect( vLight, n );
-		r = normalize( r );
-		vec3 v = - vPosition.xyz;
-		v = normalize( v );
-		float shininess = 10.;
+			// ambient and diffuse, in grey
+			vec3 s = normalize( vLight - vPosition );
+			gl_FragColor = vec4( vec3( .1 ) + vec3( .75 ) * max( 0., dot( n, s ) ), 1. );
 
-		float rm = 1. - max( 0., dot( n, v ) );
-		vec3 rim = vec3( pow( rm, 2. ) );
-
-		vec3 specular;
-		if( shininess != 0.0 ) {
-			specular = vec3( 1. ) * vec3( 1. ) * pow( max( 0.0, dot( r, v ) ), shininess );
 		} else {
-			specular = vec3( 0. );
-		}
-		specular = vec3( 0.);
-		rim = vec3( 0. );
 
-		if( renderDepth == 0 ) {
-			gl_FragColor = vec4( rim + ambient + diffuse + specular, 1. );
-		} else {
-			float z = clamp( 0., 1., gl_FragCoord.w * 10. );
-			gl_FragColor = vec4( .5 * ( 1. + n.x ), .5 * ( 1. + n.y ), z, 1. );
+			// the normal in red and green, and how near it is in blue, for the edges
+			gl_FragColor = vec4( .5 * ( 1. + n.x ), .5 * ( 1. + n.y ), min( 1., gl_FragCoord.w * 10. ), 1. );
+
 		}
 
 	}
 
 </script>
 
-<script type="x-shader/x-vertex" id="vs-render">
-
-	varying vec2 vUv;
-
-	void main() {
-
-		vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
-		gl_Position = projectionMatrix * mvPosition;
-		vUv = uv;
-
-	}
-
-</script>
-
-<script type="x-shader/x-vertex" id="fs-render">
+<script type="x-shader/x-fragment" id="fs-render">
 
 	uniform sampler2D tDiffuse;
 	uniform sampler2D tColor;
@@ -170,37 +142,39 @@
 
 	void main() {
 
-		float x = 1.0 / resolution.x;
-		float y = 1.0 / resolution.y;
-		vec4 horizEdge = vec4( 0.0 );
-		horizEdge -= texture2D( tDiffuse, vec2( vUv.x - x, vUv.y - y ) ) * 1.0;
-		horizEdge -= texture2D( tDiffuse, vec2( vUv.x - x, vUv.y     ) ) * 2.0;
-		horizEdge -= texture2D( tDiffuse, vec2( vUv.x - x, vUv.y + y ) ) * 1.0;
-		horizEdge += texture2D( tDiffuse, vec2( vUv.x + x, vUv.y - y ) ) * 1.0;
-		horizEdge += texture2D( tDiffuse, vec2( vUv.x + x, vUv.y     ) ) * 2.0;
-		horizEdge += texture2D( tDiffuse, vec2( vUv.x + x, vUv.y + y ) ) * 1.0;
-		vec4 vertEdge = vec4( 0.0 );
-		vertEdge -= texture2D( tDiffuse, vec2( vUv.x - x, vUv.y - y ) ) * 1.0;
-		vertEdge -= texture2D( tDiffuse, vec2( vUv.x    , vUv.y - y ) ) * 2.0;
-		vertEdge -= texture2D( tDiffuse, vec2( vUv.x + x, vUv.y - y ) ) * 1.0;
-		vertEdge += texture2D( tDiffuse, vec2( vUv.x - x, vUv.y + y ) ) * 1.0;
-		vertEdge += texture2D( tDiffuse, vec2( vUv.x    , vUv.y + y ) ) * 2.0;
-		vertEdge += texture2D( tDiffuse, vec2( vUv.x + x, vUv.y + y ) ) * 1.0;
-		vec3 edge = sqrt((horizEdge.rgb * horizEdge.rgb) + (vertEdge.rgb * vertEdge.rgb));
+		// edges of the normals and the depth, one point of the page apart at any pixel ratio
+		float x = 1. / resolution.x;
+		float y = 1. / resolution.y;
+		vec4 horizEdge = vec4( 0. );
+		horizEdge -= texture2D( tDiffuse, vec2( vUv.x - x, vUv.y - y ) ) * 1.;
+		horizEdge -= texture2D( tDiffuse, vec2( vUv.x - x, vUv.y     ) ) * 2.;
+		horizEdge -= texture2D( tDiffuse, vec2( vUv.x - x, vUv.y + y ) ) * 1.;
+		horizEdge += texture2D( tDiffuse, vec2( vUv.x + x, vUv.y - y ) ) * 1.;
+		horizEdge += texture2D( tDiffuse, vec2( vUv.x + x, vUv.y     ) ) * 2.;
+		horizEdge += texture2D( tDiffuse, vec2( vUv.x + x, vUv.y + y ) ) * 1.;
+		vec4 vertEdge = vec4( 0. );
+		vertEdge -= texture2D( tDiffuse, vec2( vUv.x - x, vUv.y - y ) ) * 1.;
+		vertEdge -= texture2D( tDiffuse, vec2( vUv.x    , vUv.y - y ) ) * 2.;
+		vertEdge -= texture2D( tDiffuse, vec2( vUv.x + x, vUv.y - y ) ) * 1.;
+		vertEdge += texture2D( tDiffuse, vec2( vUv.x - x, vUv.y + y ) ) * 1.;
+		vertEdge += texture2D( tDiffuse, vec2( vUv.x    , vUv.y + y ) ) * 2.;
+		vertEdge += texture2D( tDiffuse, vec2( vUv.x + x, vUv.y + y ) ) * 1.;
+		vec3 edge = sqrt( horizEdge.rgb * horizEdge.rgb + vertEdge.rgb * vertEdge.rgb );
 		float e = length( edge );
 
 		float z = texture2D( tDiffuse, vUv ).b;
 
+		// the shading, screened over a blurred copy of itself
 		vec3 b = texture2D( tColor, vUv ).rgb;
 		vec3 a = texture2D( tBlur, vUv ).rgb;
 		vec3 c = vec3( 1. ) - ( vec3( 1. ) - a ) * ( vec3( 1. ) - b );
 
-		vec2 nUV = vec2( mod( vUv.x * resolution.x / 256., 1. ), mod( vUv.y * resolution.y / 256., 1. ) );
-		float s = mix( 1., texture2D( tNoise, nUV ).r, 1. - c.r );
+		// pencil grain where it's dark, and the lines
+		float s = mix( 1., texture2D( tNoise, mod( vUv * resolution / 256., 1. ) ).r, 1. - c.r );
 		s -= .15 * e * z;
 
-		vec2 pUV = vec2( mod( vUv.x * resolution.x / 1200., 1. ), mod( vUv.y * resolution.y / 1200., 1. ) );
-		vec3 color = texture2D( tPaper, pUV ).rgb * s;
+		// the paper, a tile of 1200 points from the bottom left
+		vec3 color = texture2D( tPaper, mod( vUv * resolution / 1200., 1. ) ).rgb * s;
 
 		gl_FragColor = vec4( color, 1. );
 
@@ -208,174 +182,148 @@
 
 </script>
 
-<script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-var links = document.querySelectorAll( 'a[rel=external]' );
-for( var j = 0; j < links.length; j++ ) {
-    var a = links[ j ];
-    a.addEventListener( 'click', function( e ) {
-        window.open( this.href, '_blank' );
-        e.preventDefault();
-    }, false );
-}
+const renderer = new THREE.WebGLRenderer( { antialias: true } );
+renderer.setPixelRatio( Math.min( 2, window.devicePixelRatio ) );
+document.body.appendChild( renderer.domElement );
 
-var container, renderer, scene, camera, mesh, fov = 45;
-var start = Date.now();
-var controls;
+const scene = new THREE.Scene();
 
-var start = Date.now();
-	var x = 0, y = 0, z = 0;
-var clock = new THREE.Clock();
-var lon = 90, lat = -0, position = { x: 90, y: -0 }, isUserInteracting = false, onPointerDownPointerX, onPointerDownPointerY, onPointerDownLon, onPointerDownLat;
-var composer, composer2, composer3, pass, pass2, pass3, colorBuffer, blurBuffer, blurShader;
-var parameters = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBFormat, stencilBuffer: false };
-var meshes = [];
+const camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 1000 );
+camera.position.set( 0, 10, 10 );
 
-window.addEventListener( 'load', init );
+const controls = new OrbitControls( camera, renderer.domElement );
 
-function init() {
+const material = new THREE.ShaderMaterial( {
+	uniforms: { renderDepth: { value: 0 } },
+	vertexShader: document.getElementById( 'vs-scene' ).textContent,
+	fragmentShader: document.getElementById( 'fs-scene' ).textContent
+} );
 
-	container = document.getElementById( 'container' );
+const meshes = [];
+const box = new THREE.BoxGeometry( 1, 1, 1 );
+const s = 3, d = 40;
 
-	scene = new THREE.Scene();
-	scene.position = new THREE.Vector3( 0,0,0 );
+for ( let j = 0; j < 200; j ++ ) {
 
-	camera = new THREE.PerspectiveCamera( fov, window.innerWidth / window.innerHeight, 1, 1000 );
-	camera.position.set( 0, 10, 10 );
-	camera.target = new THREE.Vector3( 0, 0, 0 );
-
-	scene.add( camera );
-
-	renderer = new THREE.WebGLRenderer( { antialias: true });
-	renderer.setSize( window.innerWidth, window.innerHeight );
-
-	container.appendChild( renderer.domElement );
-
-	controls = new THREE.OrbitControls( camera, renderer.domElement );
-
-	window.addEventListener( 'resize', onWindowResize, false );
-
-	material = new THREE.ShaderMaterial( {
-
-		uniforms: {
-			renderDepth: { type: 'i', value: 0 }
-		},
-		vertexShader: document.getElementById( 'vs-post' ).textContent,
-		fragmentShader: document.getElementById( 'fs-post' ).textContent,
-		shading: THREE.SmoothShading,
-		transparent: true
-
-	} );
-
-	var cubeGeometry = new THREE.CubeGeometry( 1, 1, 1 );
-	var geometry = new THREE.Geometry();
-	var s = 3;
-	var d = 40;
-	for( var j = 0; j < 200; j++ ){
-		mesh = new THREE.Mesh( cubeGeometry, material );
-		mesh.scale.set( 1 + Math.random() * s, 1 + Math.random() * s, 1 + Math.random() * s );
-		mesh.position.set( ( .5 - Math.random() ) * d, ( .5 - Math.random() ) * d, ( .5 - Math.random() ) * d );
-		mesh.rotation.set( Math.random() * 2 * Math.PI, Math.random() * 2 * Math.PI, Math.random() * 2 * Math.PI );
-		scene.add( mesh );
-		meshes.push( mesh );
-	}
-
-	var l = new THREE.Mesh( new THREE.SphereGeometry( 1, 20, 20 ), new THREE.MeshNormalMaterial() );
-	scene.add( l );
-	l.position.set( 0, 0, -10 );
-
-	THREE.BlurShader = {
-
-		uniforms: {
-			tDiffuse: { type: 't', value: null },
-			delta: { type: 'v2', value: new THREE.Vector2( .01, .01) }
-		},
-		vertexShader: document.getElementById( 'vs-downsample' ).textContent,
-		fragmentShader: document.getElementById( 'fs-downsample' ).textContent
-
-	};
-
-	colorBuffer = new THREE.WebGLRenderTarget( 1, 1, parameters );
-	blurBuffer = new THREE.WebGLRenderTarget( 1, 1, parameters );
-
-	composer = new THREE.EffectComposer( renderer );
-	composer.addPass( new THREE.RenderPass( scene, camera ) );
-
-	shader = {
-
-		uniforms: {
-			tDiffuse: { type: 't', value: null },
-			tColor: { type: 't', value: null },
-			tBlur: { type: 't', value: null },
-			tNoise: { type: 't', value: new THREE.TextureLoader().load( 'assets/noise.png' ) },
-			tPaper: { type: 't', value: new THREE.TextureLoader().load( 'assets/brown.jpg' ) },
-			resolution: { type: 'v2', value: new THREE.Vector2( 1, 1 ) }
-		},
-
-		vertexShader: document.getElementById( 'vs-render' ).textContent,
-		fragmentShader: document.getElementById( 'fs-render' ).textContent
-	}
-
-	pass = new THREE.ShaderPass( shader );
-	pass.renderToScreen = true;
-	composer.addPass( pass );
-
-	var v = .1;
-	composer2 = new THREE.EffectComposer( renderer );
-	composer2.addPass( new THREE.RenderPass( scene, camera ) );
-	pass2 = new THREE.ShaderPass( THREE.BlurShader );
-	pass2.uniforms.delta.value.set( 0, v );
-	composer2.addPass( pass2 );
-	pass3 = new THREE.ShaderPass( THREE.BlurShader );
-	pass3.uniforms.delta.value.set( v, 0 );
-	composer2.addPass( pass3 );
-
-	onWindowResize();
-
-	render();
+	const mesh = new THREE.Mesh( box, material );
+	mesh.scale.set( 1 + Math.random() * s, 1 + Math.random() * s, 1 + Math.random() * s );
+	mesh.position.set( ( .5 - Math.random() ) * d, ( .5 - Math.random() ) * d, ( .5 - Math.random() ) * d );
+	mesh.rotation.set( Math.random() * 2 * Math.PI, Math.random() * 2 * Math.PI, Math.random() * 2 * Math.PI );
+	scene.add( mesh );
+	meshes.push( mesh );
 
 }
 
-function onWindowResize() {
-	renderer.setSize( window.innerWidth, window.innerHeight );
-	composer.setSize( window.innerWidth, window.innerHeight );
-	composer2.setSize( window.innerWidth / 2, window.innerHeight / 2 );
-	camera.projectionMatrix.makePerspective( fov, window.innerWidth / window.innerHeight, camera.near, camera.far );
-	pass.uniforms.resolution.value.set( window.innerWidth, window.innerHeight );
-	colorBuffer.setSize( window.innerWidth, window.innerHeight );
-	var s = 1;
-	blurBuffer.setSize( Math.floor( window.innerWidth / s ), Math.floor( window.innerHeight / s ) );
+// where the light is
+const ball = new THREE.Mesh( new THREE.SphereGeometry( 1, 20, 20 ), new THREE.MeshNormalMaterial() );
+ball.position.set( 0, 0, - 10 );
+scene.add( ball );
+
+// ---- the passes: shading, a blurred copy of it at half the size, and the normals and depth
+
+const target = () => new THREE.WebGLRenderTarget( 1, 1, { type: THREE.HalfFloatType } );
+const colorBuffer = target();
+const normalBuffer = target();
+const blurBuffers = [ target(), target() ];
+
+const quadGeometry = new THREE.PlaneGeometry( 2, 2 );
+const quad = fragmentShader => new THREE.Mesh( quadGeometry, new THREE.ShaderMaterial( {
+	uniforms: {},
+	vertexShader: document.getElementById( 'vs-quad' ).textContent,
+	fragmentShader: document.getElementById( fragmentShader ).textContent,
+	depthTest: false,
+	depthWrite: false
+} ) );
+const quadCamera = new THREE.Camera();
+
+const blur = quad( 'fs-blur' );
+blur.material.uniforms = { tDiffuse: { value: null }, delta: { value: new THREE.Vector2() } };
+
+const loader = new THREE.TextureLoader();
+const noise = loader.load( 'assets/noise.png' );
+const paper = loader.load( 'assets/brown.jpg' );
+
+const final = quad( 'fs-render' );
+final.material.uniforms = {
+	tDiffuse: { value: normalBuffer.texture },
+	tColor: { value: colorBuffer.texture },
+	tBlur: { value: blurBuffers[ 1 ].texture },
+	tNoise: { value: noise },
+	tPaper: { value: paper },
+	resolution: { value: new THREE.Vector2( 1, 1 ) }
+};
+
+function draw( mesh, to ) {
+
+	renderer.setRenderTarget( to );
+	renderer.render( mesh, quadCamera );
+
 }
+
+function resize() {
+
+	const w = window.innerWidth, h = window.innerHeight, ratio = renderer.getPixelRatio();
+
+	renderer.setSize( w, h );
+	camera.aspect = w / h;
+	camera.updateProjectionMatrix();
+
+	colorBuffer.setSize( w * ratio, h * ratio );
+	normalBuffer.setSize( w * ratio, h * ratio );
+	for ( const buffer of blurBuffers ) buffer.setSize( Math.ceil( w / 2 ), Math.ceil( h / 2 ) );
+
+	final.material.uniforms.resolution.value.set( w, h );
+
+}
+
+window.addEventListener( 'resize', resize );
+resize();
+
+const clock = new THREE.Clock();
+const blurAmount = .1;
 
 function render() {
 
-	controls.update();
+	requestAnimationFrame( render );
 
-	var ellapsedFactor = clock.getDelta();
+	const delta = clock.getDelta();
 
-	renderer.setClearColor( 0xffffff );
-	mesh.material.uniforms.renderDepth.value = 0;
-	renderer.render( scene, camera, colorBuffer );
+	for ( const mesh of meshes ) {
 
-	composer2.render();
+		mesh.rotation.x += delta * .1;
+		mesh.rotation.y += delta * .11;
+		mesh.rotation.z += delta * .12;
 
-	pass.uniforms.tColor.value = colorBuffer;
-	pass.uniforms.tBlur.value = composer2.readBuffer.texture;
-	mesh.material.uniforms.renderDepth.value = 1;
-	renderer.setClearColor( 0x808000 );
-
-	composer.render();
-
-	for( var j = 0; j < meshes.length; j++ ) {
-		meshes[ j ].rotation.x += ellapsedFactor * .1;
-		meshes[ j ].rotation.y += ellapsedFactor * .11;
-		meshes[ j ].rotation.z += ellapsedFactor * .12;
 	}
 
-	requestAnimationFrame( render );
+	controls.update();
+
+	material.uniforms.renderDepth.value = 0;
+	renderer.setClearColor( 0xffffff );
+	renderer.setRenderTarget( colorBuffer );
+	renderer.render( scene, camera );
+
+	blur.material.uniforms.tDiffuse.value = colorBuffer.texture;
+	blur.material.uniforms.delta.value.set( 0, blurAmount );
+	draw( blur, blurBuffers[ 0 ] );
+	blur.material.uniforms.tDiffuse.value = blurBuffers[ 0 ].texture;
+	blur.material.uniforms.delta.value.set( blurAmount, 0 );
+	draw( blur, blurBuffers[ 1 ] );
+
+	material.uniforms.renderDepth.value = 1;
+	renderer.setClearColor( 0x808000 );
+	renderer.setRenderTarget( normalBuffer );
+	renderer.render( scene, camera );
+
+	draw( final, null );
 
 }
 
+render();
 </script>
 
 	</body>
