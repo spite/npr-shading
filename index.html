@@ -283,14 +283,16 @@ function resize() {
 window.addEventListener( 'resize', resize );
 resize();
 
-const clock = new THREE.Clock();
+const timer = new THREE.Timer();
+timer.connect( document );
 const blurAmount = .1;
 
 function render() {
 
 	requestAnimationFrame( render );
 
-	const delta = clock.getDelta();
+	timer.update();
+	const delta = timer.getDelta();
 
 	for ( const mesh of meshes ) {
 
